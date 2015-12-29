@@ -1,0 +1,24 @@
+{
+    "BASE_DIR":"~/projects/ibuilder_project",
+    "board":"prometheus",
+    "PROJECT_NAME":"example_project",
+    "TEMPLATE":"wishbone_template.json",
+    "INTERFACE":{
+    },
+    "SLAVES":{
+    },
+    "MEMORY":{
+    },
+    "bind":{
+        "clk":{
+            "direction":"input",
+            "loc":"clk"
+        },
+        "rst":{
+            "direction":"input",
+            "loc":"rst"
+        }
+    },
+    "constraint_files":[
+    ]
+}

@@ -1,0 +1,15 @@
+{
+    "board_name":"prometheus",
+    "vendor":"Cospan Design",
+    "build_tool":"nothing",
+    "fpga_part_number":"your imagination",
+    "host_inteface":"prometheus_interface",
+    "default_constraint_files":[
+        ""
+        ],
+    "image":"",
+    "default_project":"",
+    "invert_reset":false,
+    "build_flags":{
+    }
+}
