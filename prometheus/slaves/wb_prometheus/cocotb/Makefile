@@ -20,6 +20,13 @@ VERILOG_SOURCES += ${TOPDIR}/sim/arbiter_2_masters.v
 VERILOG_SOURCES += ${TOPDIR}/sim/wishbone_mem_interconnect.v
 
 #Simulation Devices
+VERILOG_SOURCES += $(NYSA)/verilog/generic/blk_mem.v
+VERILOG_SOURCES += ${NYSA}/verilog/generic/cross_clock_strobe.v
+VERILOG_SOURCES += $(NYSA)/verilog/generic/cross_clock_enable.v
+VERILOG_SOURCES += $(NYSA)/verilog/generic/ppfifo.v
+
+
+VERILOG_SOURCES += ${TOPDIR}/rtl/fx3/fx3_bus.v
 VERILOG_SOURCES += ${TOPDIR}/rtl/wb_prometheus.v
 #DUT
 #Test Benches

@@ -1,15 +1,31 @@
 {
     "board_name":"prometheus",
     "vendor":"Cospan Design",
-    "build_tool":"nothing",
-    "fpga_part_number":"your imagination",
-    "host_inteface":"prometheus_interface",
+    "build_tool":"xilinx",
+    "clockrate":100000000,
+    "fpga_part_number":"XC7A200T-fbg676-1",
+    "host_inteface":"ppfifo_host_interface",
     "default_constraint_files":[
-        ""
+        "prometheus.ucf"
         ],
     "image":"",
-    "default_project":"",
-    "invert_reset":false,
+    "default_project":"default.json",
+    "invert_reset":true,
     "build_flags":{
-    }
+        "xst":{
+          "flags":{
+            "-sd":"{cores}",
+            "-netlist_hierarchy":"rebuilt"
+          }
+        },
+        "map":{
+            "flags":{
+                "-convert_bram8":""
+            }
+        }
+        "bitmap":{
+          "ConfigRate":"50"
+        }
+    },
+    "required":"required.json"
 }

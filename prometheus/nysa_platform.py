@@ -78,12 +78,8 @@ class PrometheusPlatform(Platform):
         Raises:
             NysaError: An error occured when scanning for the build tools
         """
-        raise AssertionError("%s not implemented" % sys._getframe().f_code.co_name)
-        '''
-        Although Nysa can be used with Altera the following two lines can be used
-        for determining if Xilinx is installed on this platform
-
         if find_xilinx_path() is None:
             return False
         return True
-        '''
+
+

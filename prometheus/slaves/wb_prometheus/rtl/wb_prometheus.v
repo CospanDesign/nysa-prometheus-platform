@@ -80,18 +80,90 @@ module wb_prometheus (
   output  reg [31:0]  o_wbs_dat,
   input       [31:0]  i_wbs_adr,
 
-  //This interrupt can be controlled from this module or a submodule
-  output  reg         o_wbs_int
-  //output              o_wbs_int
+  output  reg         o_wbs_int,
+
+  //Host Interface
+
+  //Incomming Interface
+  output              o_ingress_ready,
+  input               i_ingress_activate,
+  output      [23:0]  o_ingress_packet_size,
+  output      [31:0]  o_ingress_data,
+  input               i_ingress_strobe,
+
+  //Outgoing Interface
+  output      [1:0]   o_egress_ready,
+  input       [1:0]   i_egress_activate,
+  output      [23:0]  o_egress_size,
+  input       [31:0]  i_egress_data,
+  input               i_egress_strobe,
+
+  //Phy Interface
+  output              o_gpif_clk,
+
+  output              o_cs_n,
+  output              o_oe_n,
+  output              o_we_n,
+  output              o_re_n,
+  output              o_pkt_end_n,
+  inout       [31:0]  io_data,
+
+  //DMA Flags
+  input               i_in_rdy,
+  input               i_out_rdy,
+  output      [1:0]   o_socket_addr,
+  output              o_gpif_int_n
+
 );
 
 //Local Parameters
-localparam     ADDR_0  = 32'h00000000;
-localparam     ADDR_1  = 32'h00000001;
-localparam     ADDR_2  = 32'h00000002;
+localparam     CONTROL  = 32'h00000000;
+localparam     STATUS   = 32'h00000001;
 
 //Local Registers/Wires
+reg                 r_usb3_data_size_sel;
 //Submodules
+fx3_bus #(
+  .ADDRESS_WIDTH        (8                      )
+) fx3 (
+
+  .clk                  (clk                    ),
+  .rst                  (rst                    ),
+
+  .o_gpif_clk           (o_gpif_clk             ),
+  .io_data              (io_data                ),
+
+  .o_cs_n               (o_cs_n                 ),
+  .o_oe_n               (o_oe_n                 ),
+  .o_we_n               (o_we_n                 ),
+  .o_re_n               (o_re_n                 ),
+  .o_pkt_end_n          (o_pkt_end_n            ),
+
+
+  .i_in_rdy             (i_in_rdy               ),
+  .i_out_rdy            (i_out_rdy              ),
+
+  .o_socket_addr        (o_socket_addr          ),
+  .o_gpif_int_n         (o_gpif_in_n            ),
+
+//Configuration
+  .i_usb3_data_size_sel (r_usb3_data_size_sel   ),
+
+//Write side FIFO interface
+  .o_ingress_ready      (o_ingress_ready        ),
+  .i_ingress_activate   (i_ingress_activate     ),
+  .o_ingress_packet_size(o_ingress_packet_size  ),
+  .o_ingress_data       (o_ingress_data         ),
+  .i_ingress_strobe     (i_ingress_strobe       ),
+
+//Read side FIFO interface
+  .o_egress_ready       (o_egress_ready         ),
+  .i_egress_activate    (i_egress_activate      ),
+  .o_egress_size        (o_egress_size          ),
+  .i_egress_data        (i_egress_data          ),
+  .i_egress_strobe      (i_egress_strobe        )
+);
+
 //Asynchronous Logic
 //Synchronous Logic
 
@@ -114,31 +186,12 @@ always @ (posedge clk) begin
         if (i_wbs_we) begin
           //write request
           case (i_wbs_adr)
-            ADDR_0: begin
-              //writing something to address 0
-              //do something
-
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("ADDR: %h user wrote %h", i_wbs_adr, i_wbs_dat);
+            CONTROL: begin
+                $display("ADDR: %h user wrote %h", i_wbs_adr, i_wbs_dat);
             end
-            ADDR_1: begin
-              //writing something to address 1
-              //do something
-
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("ADDR: %h user wrote %h", i_wbs_adr, i_wbs_dat);
+            STATUS: begin
+                $display("ADDR: %h user wrote %h", i_wbs_adr, i_wbs_dat);
             end
-            ADDR_2: begin
-              //writing something to address 3
-              //do something
-
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("ADDR: %h user wrote %h", i_wbs_adr, i_wbs_dat);
-            end
-            //add as many ADDR_X you need here
             default: begin
             end
           endcase
@@ -146,28 +199,14 @@ always @ (posedge clk) begin
         else begin
           //read request
           case (i_wbs_adr)
-            ADDR_0: begin
-              //reading something from address 0
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("user read %h", ADDR_0);
-              o_wbs_dat <= ADDR_0;
+            CONTROL: begin
+              $display("user read %h", CONTROL);
+              o_wbs_dat <= CONTROL;
             end
-            ADDR_1: begin
-              //reading something from address 1
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("user read %h", ADDR_1);
-              o_wbs_dat <= ADDR_1;
+            STATUS: begin
+              $display("user read %h", STATUS);
+              o_wbs_dat <= STATUS;
             end
-            ADDR_2: begin
-              //reading soething from address 2
-              //NOTE THE FOLLOWING LINE IS AN EXAMPLE
-              //  THIS IS WHAT THE USER WILL READ FROM ADDRESS 0
-              $display("user read %h", ADDR_2);
-              o_wbs_dat <= ADDR_2;
-            end
-            //add as many ADDR_X you need here
             default: begin
             end
           endcase
