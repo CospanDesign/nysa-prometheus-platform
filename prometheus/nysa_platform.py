@@ -35,10 +35,14 @@ from nysa.host.nysa_platform import Platform
 from nysa.ibuilder.lib.xilinx_utils import find_xilinx_path
 from prometheus import Prometheus
 
+from fx3.prometheus_usb import PrometheusUSB
+from fx3.prometheus_usb import USB_STATUS
 
 class PrometheusPlatform(Platform):
     def __init__(self, status = None):
         super (PrometheusPlatform, self).__init__(status)
+        self.vendor = 0x0403
+        self.product = 0x8530
 
     def get_type(self):
         if self.status: self.status.Verbose("Returnig 'prometheus' type")
@@ -61,7 +65,18 @@ class PrometheusPlatform(Platform):
             NysaError: An error occured when scanning for devices
 
         """
-        raise AssertionError("%s not implemented" % sys._getframe().f_code.co_name)
+        self.dev_dict = {}
+
+        self.usb_status = USB_DEVICE_NOT_CONNECTED
+        self.fx3 = PrometheusUSB(self.usb_device_status_cb,
+                                 self.device_to_host_comm)
+
+        if self.fx3.is_connected():
+            print "FX3 is connected, determining if it is programmed as Prometheus..."
+            if self.fx3.is_prometheus_connected():
+                pass
+
+        return self.dev_dict
 
     def test_build_tools(self):
         """
@@ -81,5 +96,46 @@ class PrometheusPlatform(Platform):
         if find_xilinx_path() is None:
             return False
         return True
+
+
+
+    def device_to_host_comm(self, name, level, text):
+        self.status.Info("Callback from Device: %s, %s" % name, text)
+
+    def usb_device_status_cb(self, status):
+        if status == USB_STATUS.BOOT_FX3_CONNECTED:
+            if self.usb_status != USB_DEVICE_CONNECTED:
+                self.usb_status = USB_DEVICE_CONNECTED
+                self.status.Info("USB Device Connected")
+
+        elif status == USB_STATUS.DEVICE_NOT_CONNECTED:
+            if self.usb_status != USB_DEVICE_NOT_CONNECTED:
+                self.usb_status = USB_DEVICE_NOT_CONNECTED
+                self.status.Info("USB Device Not Connected")
+
+        elif status == USB_STATUS.FX3_PROGRAMMING_FAILED:
+            if self.usb_status != USB_FAILED:
+                self.usb_status = USB_FAILED
+                self.status.Info("USB Failed")
+
+        elif status == USB_STATUS.FX3_PROGRAMMING_PASSED:
+            if self.usb_status != USB_PROGRAMMED:
+                self.usb_status = USB_PROGRAMMED
+                self.status.Info("FX3 Programmed")
+
+        elif status == USB_STATUS.BUSY:
+            if self.usb_status != USB_BUSY:
+                self.usb_status = USB_BUSY
+                self.status.Info("USB Busy")
+
+        elif status == USB_STATUS.USER_APPLICATION:
+            if self.usb_status != USB_USER_APPLICATION:
+                self.usb_status = USB_USER_APPLICATION
+                self.status.Info("User Application??")
+
+        elif status == USB_STATUS.PROMETHEUS_FX3_CONNECTED:
+            if self.usb_status != USB_USER_PROMETHEUS_FX3_CONNECTED:
+                self.usb_status = USB_USER_PROMETHEUS_FX3_CONNECTED
+                self.status.Info("Prometheus FX3 Connected")
 
 
