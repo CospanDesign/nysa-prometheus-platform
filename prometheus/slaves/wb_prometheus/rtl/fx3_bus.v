@@ -71,7 +71,9 @@ output      [1:0]   o_egress_ready,
 input       [1:0]   i_egress_activate,
 output      [23:0]  o_egress_size,
 input       [31:0]  i_egress_data,
-input               i_egress_strobe
+input               i_egress_strobe,
+
+output      [7:0]   o_debug
 );
 
 //Local Parameters
@@ -97,6 +99,7 @@ reg         [3:0]   state;
 reg         [3:0]   delay_count;
 
 wire        [9:0]   data_count;
+wire                busy;
 
 
 wire        [31:0]  fx3_read_data;
@@ -181,6 +184,15 @@ assign  o_egress_size   = data_count;
 
 assign  o_gpif_clk      = clk;
 assign  o_gpif_int_n    = 1;
+
+assign  busy            = (state != IDLE);
+
+assign  o_debug         = {4'b0000,
+                          fx3_write_activate,
+                          busy,
+                          i_out_rdy,
+                          i_in_rdy};
+
 
 //Synchronous Logic
 

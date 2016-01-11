@@ -70,5 +70,22 @@ NET o_gpif_socket_addr<1>   LOC = AC21    | IOSTANDARD = LVCMOS33;
 
 NET o_gpif_interrupt_n      LOC = AB22    | IOSTANDARD = LVCMOS33;
 
+#Papillio Wing
+NET wing<1>                 LOC = N26     | IOSTANDARD = LVCMOS33;
+NET wing<2>                 LOC = K26     | IOSTANDARD = LVCMOS33;
+NET wing<3>                 LOC = L23     | IOSTANDARD = LVCMOS33;
+NET wing<4>                 LOC = K25     | IOSTANDARD = LVCMOS33;
+NET wing<5>                 LOC = M20     | IOSTANDARD = LVCMOS33;
+NET wing<6>                 LOC = P14     | IOSTANDARD = LVCMOS33;
+NET wing<7>                 LOC = N17     | IOSTANDARD = LVCMOS33;
+NET wing<8>                 LOC = P18     | IOSTANDARD = LVCMOS33;
+NET wing<9>                 LOC = L22     | IOSTANDARD = LVCMOS33;
+NET wing<10>                LOC = L20     | IOSTANDARD = LVCMOS33;
+NET wing<11>                LOC = M19     | IOSTANDARD = LVCMOS33;
+NET wing<12>                LOC = N16     | IOSTANDARD = LVCMOS33;
+NET wing<13>                LOC = P16     | IOSTANDARD = LVCMOS33;
+NET wing<14>                LOC = M22     | IOSTANDARD = LVCMOS33;
+NET wing<15>                LOC = R14     | IOSTANDARD = LVCMOS33;
+NET wing<16>                LOC = R16     | IOSTANDARD = LVCMOS33;
 
 

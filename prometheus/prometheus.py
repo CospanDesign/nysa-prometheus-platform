@@ -33,42 +33,33 @@ class Prometheus(Nysa):
         self.s.Info("Callback from Device: %s, %s" % name, text)
 
     def usb_device_status_cb(self, status):
-        #print "USB Main Callback"
-        #self.status(0, "USB Device CB: %d" % status)
         if status == USB_STATUS.BOOT_FX3_CONNECTED:
-            if self.usb_status != USB_DEVICE_CONNECTED:
-                self.usb_status = USB_DEVICE_CONNECTED
-                self.s.Info("USB Device Connected")
+            self.usb_status = USB_STATUS.BOOT_FX3_CONNECTED
+            self.status.Info("USB Device Connected")
 
         elif status == USB_STATUS.DEVICE_NOT_CONNECTED:
-            if self.usb_status != USB_DEVICE_NOT_CONNECTED:
-                self.usb_status = USB_DEVICE_NOT_CONNECTED
-                self.s.Info("USB Device Not Connected")
+            self.usb_status = USB_STATUS.DEVICE_NOT_CONNECTED
+            self.status.Info("USB Device Not Connected")
 
         elif status == USB_STATUS.FX3_PROGRAMMING_FAILED:
-            if self.usb_status != USB_FAILED:
-                self.usb_status = USB_FAILED
-                self.s.Info("USB Failed")
+            self.usb_status = USB_STATUS.FX3_PROGRAMMING_FAILED
+            self.status.Info("USB Failed")
 
         elif status == USB_STATUS.FX3_PROGRAMMING_PASSED:
-            if self.usb_status != USB_PROGRAMMED:
-                self.usb_status = USB_PROGRAMMED
-                self.s.Info("FX3 Programmed")
+            self.usb_status = USB_STATUS.FX3_PROGRAMMING_PASSED
+            self.status.Info("FX3 Programmed")
 
         elif status == USB_STATUS.BUSY:
-            if self.usb_status != USB_BUSY:
-                self.usb_status = USB_BUSY
-                self.s.Info("USB Busy")
+            self.usb_status = USB_STATUS.BUSY
+            self.status.Info("USB Busy")
 
         elif status == USB_STATUS.USER_APPLICATION:
-            if self.usb_status != USB_USER_APPLICATION:
-                self.usb_status = USB_USER_APPLICATION
-                self.s.Info("User Application??")
+            self.usb_status = USB_STATUS.USER_APPLICATION
+            self.status.Info("User Application??")
 
         elif status == USB_STATUS.PROMETHEUS_FX3_CONNECTED:
-            if self.usb_status != USB_USER_PROMETHEUS_FX3_CONNECTED:
-                self.usb_status = USB_USER_PROMETHEUS_FX3_CONNECTED
-                self.s.Info("Prometheus FX3 Connected")
+            self.usb_status = USB_STATUS.PROMETHEUS_FX3_CONNECTED
+            self.status.Info("Prometheus FX3 Connected")
 
     def read(self, address, length = 1, disable_auto_inc = False):
         """read

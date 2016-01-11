@@ -28,32 +28,20 @@ from usb_device import USBDevice
 from usb_device import USBDeviceError
 import time
 import usb
+from defines import *
 
 class PrometheusFX3Error(Exception):
     pass
-
-
 
 class PrometheusFX3(USBDevice):
 
     def __init__(self, usb_server):
         self.usb_server = usb_server
-        super(PrometheusFX3, self).__init__()
-        self.vid = 0x04B4
-        self.pid = 0x0031
-        self.dev = None
-        self.name = "Prometheus FX3"
-
+        super(PrometheusFX3, self).__init__(name = "Prometheus FX3", vid = CYPRESS_VID, pid = PROMETHEUS_PID)
         self.configuration = None
 
     def on_connect(self):
         print "Called when a connect occurs"
-        #Set up the listeners
-        #self.dev.set_configuration(self.configuration)
-
-        self.start_read_logger_listener()
-        #self.configuration = self.dev.get_active_configuration()
-        #interface_number = cfg[(0,0)].bInterfaceNumber
 
     def on_release(self):
         print "Called when a release occurs"
@@ -63,7 +51,7 @@ class PrometheusFX3(USBDevice):
             self.add_listener(self.read_logger)
 
     def read_logger(self):
-        #print "Read the Logger"
+        print "Read the Logger"
         data = None
         try:
             #data = self.dev.read(0x81, 128, 0, 10)
@@ -72,11 +60,11 @@ class PrometheusFX3(USBDevice):
             if err.errno == 110:
                 return
             if err.errno == 5:
-                print "Device was disconnected"
+                print "Error 5: Device was disconnected"
                 self.usb_server.update_usb()
                 return
             if err.errno == 16:
-                print "Device was disconnected"
+                print "Error 16: Device was disconnected"
                 self.usb_server.update_usb()
                 return
             else:
@@ -87,6 +75,7 @@ class PrometheusFX3(USBDevice):
         self.usb_server.device_to_host_comm(self.name, data[0], data[8:].tostring())
 
     def host_to_device_comm(self, text):
+        print "Host to device comm"
         with self.usb_lock:
             try:
                 #self.dev.write(0x01, text, 0, 100)
@@ -95,15 +84,16 @@ class PrometheusFX3(USBDevice):
                 if err.errno == 110:
                     return
                 if err.errno == 5:
-                    print "Device was disconnected"
+                    print "Error 5: Device was disconnected"
                     self.usb_server.update_usb()
                     return
                 if err.errno == 16:
-                    print "Device was disconnected"
+                    print "Error 16: Device was disconnected"
                     self.usb_server.update_usb()
                     return
 
     def read_mcu_config(self, address = 0xB3, length = 1):
+        print "Read MCU Config"
         data = None
         with self.usb_lock:
             try:
@@ -117,14 +107,14 @@ class PrometheusFX3(USBDevice):
 
             except usb.core.USBError, err:
                 if err.errno == 110:
-                    raise USBDeviceError("Device Timeout set COMM Mode")
+                    raise USBDeviceError("Error 110: Timeout")
                 if err.errno == 5:
                     self.usb_server.update_usb()
-                    raise USBDeviceError("Device was disconnected")
+                    raise USBDeviceError("Error 5: Device was disconnected")
 
                 if err.errno == 16:
                     self.usb_server.update_usb()
-                    raise USBDeviceError("Device was disconnected")
+                    raise USBDeviceError("Error 16: Device was disconnected")
 
                 else:
                     raise USBDeviceError("Unknown USB Device Error: %s" % str(err))
@@ -147,11 +137,11 @@ class PrometheusFX3(USBDevice):
                     raise USBDeviceError("Device Timeout set COMM Mode")
                 if err.errno == 5:
                     self.usb_server.update_usb()
-                    raise USBDeviceError("Device was disconnected")
+                    raise USBDeviceError("Error 5: Device was disconnected")
 
                 if err.errno == 16:
                     self.usb_server.update_usb()
-                    raise USBDeviceError("Device was disconnected")
+                    raise USBDeviceError("Error 16: Device was disconnected")
 
                 else:
                     raise USBDeviceError("Unknown USB Device Error: %s" % str(err))
@@ -425,4 +415,12 @@ class PrometheusFX3(USBDevice):
                         raise USBDeviceError("Unknown USB Device Error: %s" % str(err))
 
 
+
+    #Test Stuff
+    def read_gpios(self):
+        return self.read_mcu_config(CMD_GPIO_CONTROL, 1)[0]
+
+    def write_gpios(self, gpios):
+        g = Array('B', [gpios])
+        self.write_mcu_config(CMD_GPIO_CONTROL, g)
 

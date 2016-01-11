@@ -112,8 +112,9 @@ module wb_prometheus (
   input               i_in_rdy,
   input               i_out_rdy,
   output      [1:0]   o_socket_addr,
-  output              o_gpif_int_n
+  output              o_gpif_int_n,
 
+  output      [7:0]   o_debug
 );
 
 //Local Parameters
@@ -122,6 +123,7 @@ localparam     STATUS   = 32'h00000001;
 
 //Local Registers/Wires
 reg                 r_usb3_data_size_sel;
+wire  [7:0]         w_debug;
 //Submodules
 fx3_bus #(
   .ADDRESS_WIDTH        (8                      )
@@ -161,7 +163,10 @@ fx3_bus #(
   .i_egress_activate    (i_egress_activate      ),
   .o_egress_size        (o_egress_size          ),
   .i_egress_data        (i_egress_data          ),
-  .i_egress_strobe      (i_egress_strobe        )
+  .i_egress_strobe      (i_egress_strobe        ),
+
+
+  .o_debug              (o_debug                )
 );
 
 //Asynchronous Logic

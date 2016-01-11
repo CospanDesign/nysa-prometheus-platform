@@ -24,6 +24,7 @@
 
 import usb
 import threading
+from defines import CMD_RESET_TO_BOOTMODE
 
 
 class USBDeviceListenThread(threading.Thread):
@@ -74,17 +75,16 @@ class USBDeviceListenThread(threading.Thread):
     def kill(self):
         self.ready = False
 
-
-
 class USBDeviceError (Exception):
     pass
 
 class USBDevice (object):
 
-    def __init__(self):
+    def __init__(self, name, vid, pid):
         super (USBDevice, self).__init__()
-        self.vid = 0x0000
-        self.pid = 0x0000
+        self.vid = vid
+        self.pid = pid
+        self.name = name
         self.dev = None
 
         self.timer = None
@@ -92,7 +92,7 @@ class USBDevice (object):
         self.listeners = []
 
         self.usb_lock = threading.Lock()
-    
+
     def reset_to_boot(self):
         """
         Send a Cypress Specific 'Reset to default command to put the USB back
@@ -117,25 +117,21 @@ class USBDevice (object):
         try:
             self.dev.ctrl_transfer(
                 bmRequestType = 0x40,   #VRequest, To the devce, Endpoint
-                bRequest      = 0xE0,   #Reset
+                bRequest      = CMD_RESET_TO_BOOTMODE,   #Reset
                 wValue        = 0x00,
                 wIndex        = 0x00,
                 timeout       = 1000)   #Timeout    = 1 second
             self.release()
         except usb.core.USBError, err:
             if err.errno == 110:
+                raise USBDeviceError("110 Errror")
                 return
             if err.errno == 5:
-                print "Device was disconnected"
-                self.usb_server.update_usb()
-                return 
+                raise USBDeviceError("Error 5: Device was disconnected")
             if err.errno == 16:
-                print "Device was disconnected"
-                self.usb_server.update_usb()
-                return 
+                raise USBDeviceError("Error 16: Device was disconnected")
             else:
-                print "Unknown USB Error: %s" % str(err)
-                return
+                raise USBDeviceError("Unknown USB Error: %s" % str(err))
 
     def get_device_info(self):
         """
@@ -149,7 +145,7 @@ class USBDevice (object):
 
     def get_pid(self):
         return self.pid
-            
+
     def is_connected(self):
         if self.dev is None:
             return False
@@ -174,7 +170,8 @@ class USBDevice (object):
         """
         if self.dev is None:
             return
-        
+
+        usb.util.dispose_resources(self.dev)
         self.dev = None
         #usb.util.release_interface(self.dev)
         self.on_release()
@@ -255,6 +252,7 @@ class USBDevice (object):
         #    #This is ugly but I'm not sure how to do this outside of pyside
             self.timer = threading.Timer(self.timeout, self.listen_callback)
             self.timer.start()
+
 
 
 

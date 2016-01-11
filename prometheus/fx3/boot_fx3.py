@@ -36,7 +36,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
                 os.pardir))
 
 from defines import CYPRESS_VID
-from defines import FX3_PID
+from defines import BOOT_PID
 
 
 class BootFX3Error(Exception):
@@ -44,10 +44,10 @@ class BootFX3Error(Exception):
 
 class BootFX3(USBDevice):
     def __init__(self):
-        super(BootFX3, self).__init__()
-        self.dev = None
-        self.vid = CYPRESS_VID
-        self.pid = FX3_PID
+        super(BootFX3, self).__init__(name = "Bood FX3", vid = CYPRESS_VID, pid = BOOT_PID)
+        #self.dev = None
+        #self.vid = CYPRESS_VID
+        #self.pid = FX3_PID
 
     def download(self, buf):
         """
@@ -142,18 +142,18 @@ class BootFX3(USBDevice):
             print "Writing: %d bytes to address: 0x%X" % (len(buf), address)
             try:
                 write_len = self.dev.ctrl_transfer(
-                    bmRequestType = 0x40,            #VRequest, to device, endpoint
-                    bRequest = 0xA0,                 #Vendor Spcific write command
-                    wValue = 0x0000FFFF & address,   #Addr Low 16-bit value
-                    wIndex = address >> 16,          #Addr High 16-bit value
-                    data_or_wLength = buf.tostring(),              #Data
-                    timeout = 1000)                                #Timeout 1 second
+                    bmRequestType   = 0x40,                     #VRequest, to device, endpoint
+                    bRequest        = 0xA0,                     #Vendor Spcific write command
+                    wValue          = 0x0000FFFF & address,     #Addr Low 16-bit value
+                    wIndex          = address >> 16,            #Addr High 16-bit value
+                    data_or_wLength = buf.tostring(),           #Data
+                    timeout         = 1000)                     #Timeout 1 second
             except usb.core.USBError, err:
-                pass
+                print "USB Error: %s" % str(err)
 
             #Check if there was an error in the transfer
             if write_len != len(buf):
-                raise BootFX3Error("Write Size != Length of buffer")
+                raise BootFX3Error("Write Size != Length of buffer: %d != %d" % (write_len, len(buf)))
 
             #Update the index
             index += write_len
@@ -167,4 +167,4 @@ class BootFX3(USBDevice):
 
     def reset_to_boot(self):
         print "Do not reset the board when it is already in boot mode"
-        pass
+

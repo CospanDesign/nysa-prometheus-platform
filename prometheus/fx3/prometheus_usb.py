@@ -31,7 +31,8 @@ import socket
 import threading
 import select
 import re
-import pyudev
+
+from defines import *
 #from pyudev.pyqt4 import MonitorObserver
 
 import usb.core
@@ -41,9 +42,6 @@ from array import array as Array
 
 sys.path.append(os.path.join(os.path.dirname(__file__),
                 os.pardir))
-
-from defines import CYPRESS_VID
-from defines import FX3_PID
 
 from usb_device import USBDeviceError
 from usb_device import USBDevice
@@ -68,37 +66,13 @@ USB_STATUS = enum ('BOOT_FX3_CONNECTED',
                    'BUSY',
                    'USER_APPLICATION')
 
-class DelayThread(threading.Thread):
-    def __init__(self, server, timeout = 2):
-        super(DelayThread, self).__init__()
-        self.timeout = timeout
-        self.lock = threading.Lock()
-        self.server = server
-
-    def run(self):
-        time.sleep(self.timeout)
-        try:
-            if self.lock.acquire(False):
-                #print "Got a lock"
-                self.server.update_usb()
-            else:
-                self.server.delay_cleanup()
-                return
-
-        except PrometheusUSBError, err:
-            pass
-        finally:
-            #print "Release the lock"
-            self.lock.release()
-            self.server.delay_cleanup()
-
 class PrometheusUSBError(Exception):
     pass
 
 class PrometheusUSBWarning(Exception):
     pass
 
-class PrometheusUSB():
+class PrometheusUSB(object):
     """
     Class to handle communication between the processor and host computer
     """
@@ -117,24 +91,11 @@ class PrometheusUSB():
 
         self.boot_fx3 = BootFX3()
         self.prometheus_fx3 = PrometheusFX3(self)
-        self.delay_thread = None
 
         try:
             self.update_usb()
         except PrometheusUSBError, err:
             pass
-
-        #pyudev
-        self.context = pyudev.Context()
-        self.monitor = pyudev.Monitor.from_netlink(self.context)
-        self.monitor.filter_by(subsystem="usb")
-        #self.observer = MonitorObserver(self.monitor)
-        #self.observer.deviceEvent.connect(self.udev_device_event)
-        print "Starting Udev monitor"
-        self.monitor.start()
-        #end pyudev
-
-        self.lock = threading.Lock()
 
     def udev_device_event(self, device):
         try:
@@ -205,11 +166,14 @@ class PrometheusUSB():
                         self._set_status(USB_STATUS.PROMETHEUS_FX3_CONNECTED)
                     except PrometheusFX3Error, err:
                         self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
+                        e = "Prometheus FX3 Error: %s" % str(err)
+                        raise PrometheusUSBError(e)
                     except USBDeviceError, err:
+                        e = "USB Device Error: %s" % str(err)
                         self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
                         raise PrometheusUSBError(str(err))
                     except usb.core.USBError, err:
+                        e = "USB Core Error: %s" % str(err)
                         self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
                         raise PrometheusUSBError(str(err))
                     #Set Status
@@ -228,31 +192,37 @@ class PrometheusUSB():
     def is_prometheus_connected(self):
         return self.prometheus_fx3.is_connected()
 
-    def download_fpga_image(self, buf):
+    def program_fpga(self, buf):
+        print "Programming FPGA"
         if self.prometheus_fx3.is_connected():
+            print "Prometheus is connected..."
             self.prometheus_fx3.upload_fpga_image(buf)
         else:
             raise PrometheusUSBError("FX3 Not Connected")
 
-    def download_program(self, buf):
+    def program_mcu(self, buf):
         if self.boot_fx3.is_connected():
             try:
                 self.boot_fx3.download(buf)
                 self.boot_fx3.release()
                 self._set_status(USB_STATUS.FX3_PROGRAMMING_PASSED)
-                self.delay_start()
+                time.sleep(2)
             except BootFX3Error, err:
                 self._set_status(USB_STATUS.FX3_PROGRAMMING_FAILED)
                 raise PrometheusUSBError("Error Programming FX3: %s" % str(err))
         else:
             raise PrometheusUSBError("FX3 Not Connected")
 
-    def vendor_reset(self, vid, pid):
+    def vendor_reset(self):
         if self.prometheus_fx3.is_connected():
             self.prometheus_fx3.reset_to_boot()
+            self.prometheus_fx3.release()
+
             self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
             #print "Delay a usb scan for a couple of seconds"
-            self.delay_start(timeout = 4)
+            time.sleep(4)
+            self.is_connected()
+
             return True
         return False
 
@@ -264,13 +234,9 @@ class PrometheusUSB():
     def get_usb_status(self):
         return self.status
 
-    def delay_start(self, timeout = 2):
-        if self.delay_thread is None:
-            self.delay_thread = DelayThread(self, timeout)
-            self.delay_thread.start()
-
-    def delay_cleanup(self):
-        self.delay_thread = None
+    def set_comm_mode(self):
+        if self.prometheus_fx3.is_connected():
+            self.prometheus_fx3.set_fpga_comm_mode()
 
     def host_to_device_comm(self, text):
         if self.prometheus_fx3:
@@ -280,36 +246,44 @@ class PrometheusUSB():
         self.device_to_host_comm_cb(name, level, text)
 
     #Prometheus USB Functions
-    def prometheus_read_config(self, address = 0xB3, length = 1):
+    def prometheus_read_config(self, address = CMD_INTERNAL_CONFIG, length = 1):
         return self.prometheus_fx3.read_mcu_config(address, length)
 
-    def prometheus_write_config(self, address = 0xB3, data = []):
+    def prometheus_write_config(self, address = CMD_INTERNAL_CONFIG, data = []):
         self.prometheus_fx3.write_mcu_config(address, data)
 
     def prometheus_start_debug(self):
-        self.prometheus_fx3.write_mcu_config(address = 0xB0, data = [0])
+        self.prometheus_fx3.write_mcu_config(address = CMD_START_DEBUG, data = [0])
         self.prometheus_fx3.start_read_logger_listener()
 
     def prometheus_set_reg_en_to_output(self):
-        self.prometheus_fx3.write_mcu_config(address = 0xB4, data = [0])
+        self.prometheus_fx3.write_mcu_config(address = CMD_USB_SET_REG_EN_TO_OUT, data = [0])
 
-    def prometheus_enable_regulator(self):
-        self.prometheus_fx3.write_mcu_config(address = 0xB5, data = [0])
-
-    def prometheus_disable_regulator(self):
-        self.prometheus_fx3.write_mcu_config(address = 0xB6, data = [0])
+    def enable_regulator(self, enable):
+        if enable:
+            self.prometheus_fx3.write_mcu_config(address = CMD_USB_ENABLE_REGULATOR, data = [0])
+        else:
+            self.prometheus_fx3.write_mcu_config(address = CMD_USB_DISABLE_REGULATOR, data = [0])
 
     def prometheus_ping(self):
         self.prometheus_fx3.ping()
 
     def prometheus_write(self, data = [0]):
         address = 0
-
         self.prometheus_fx3.write(address, data)
 
     def prometheus_read(self, length):
         address = 0
         self.prometheus_fx3.read(address, length)
+
+    def enable_fpga_reset(self, enable):
+        gpios = self.read_gpios()
+
+    def read_gpios(self):
+        return self.prometheus_fx3.read_gpios()
+
+    def write_gpios(self, gpios):
+        self.prometheus_fx3.write_gpios(gpios)
 
     #Shutdown Server
     def shutdown(self):
@@ -318,24 +292,4 @@ class PrometheusUSB():
             self.cypress_fx3_dev = None
         if self.prometheus_fx3:
             self.prometheus_fx3.shutdown()
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    print "Signal Test!"
-    pu = PrometheusUSB()
-    print "Insert and Remove a FX3 USB device and a Signal should be emitted"
-    print "\tPress Enter to End the Test"
-    import sys
-    import select
-    while True:
-        try:
-            select.select([sys.stdin], [], [])
-            sys.exit()
-        except select.error, err:
-            print "Received an Error Message"
 

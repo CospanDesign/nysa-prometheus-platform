@@ -22,7 +22,7 @@
             "flags":{
                 "-convert_bram8":""
             }
-        }
+        },
         "bitmap":{
           "ConfigRate":"50"
         }

@@ -53,16 +53,16 @@
         "o_gpif_int_n":{
           "loc":"o_gpif_interrupt_n",
           "direction":"output"
+        },
+        "o_debug[3:0]":{
+          "loc":"o_led_n[3:0]",
+          "direction":"output"
         }
       }
     },
     "gpio1":{
       "filename":"wb_gpio.v",
       "bind":{
-        "gpio_out[3:0]":{
-          "loc":"o_led_n[3:0]",
-          "direction":"output"
-        },
         "gpio_in[7:4]":{
           "loc":"i_button[3:0]",
           "direction":"input"
