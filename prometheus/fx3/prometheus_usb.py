@@ -46,11 +46,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
 from usb_device import USBDeviceError
 from usb_device import USBDevice
 
-from boot_fx3 import BootFX3Error
-from boot_fx3 import BootFX3
-
-from prometheus_fx3 import PrometheusFX3Error
-from prometheus_fx3 import PrometheusFX3
 
 SLEEP_COUNT = 2
 
@@ -58,16 +53,18 @@ def enum(*sequential, **named):
   enums = dict(zip(sequential, range(len(sequential))), **named)
   return type('Enum', (), enums)
 
-USB_STATUS = enum ('BOOT_FX3_CONNECTED',
-                   'DEVICE_NOT_CONNECTED',
-                   'PROMETHEUS_FX3_CONNECTED',
-                   'FX3_PROGRAMMING_FAILED',
-                   'FX3_PROGRAMMING_PASSED',
-                   'BUSY',
-                   'USER_APPLICATION')
-
 class PrometheusUSBError(Exception):
-    pass
+    def __init__(self, data):
+        if type(data) is str:
+            super (PrometheusUSBError, self).__init__(data)
+        if type(data) is usb.core.USBError:
+            err = ""
+            if data.errno == 110:
+                err = "Device timed out"
+            elif (data.errno == 6) or (data.errno == 16):
+                err = "Device is disconnected"
+            else:
+                err = "Unknown error number: %d" % str(err)
 
 class PrometheusUSBWarning(Exception):
     pass
@@ -76,166 +73,261 @@ class PrometheusUSB(object):
     """
     Class to handle communication between the processor and host computer
     """
-    def __init__(self,
-                 usb_device_status_cb,
-                 device_to_host_comm_cb):
+
+    def __init__(self, debug = False):
         super (PrometheusUSB, self).__init__()
+        self.debug = debug
+        self.usb_lock = threading.Lock()
+        self.dev = None
+        #One Second
+        self.timeout = 1000
 
-
-        self.cypress_fx3_dev = None
-        self.prometheus_dev = None
-
-        self.usb_device_status_cb = usb_device_status_cb
-        self.device_to_host_comm_cb = device_to_host_comm_cb
-        self.status = USB_STATUS.DEVICE_NOT_CONNECTED
-
-        self.boot_fx3 = BootFX3()
-        self.prometheus_fx3 = PrometheusFX3(self)
-
-        try:
-            self.update_usb()
-        except PrometheusUSBError, err:
-            pass
-
-    def udev_device_event(self, device):
-        try:
-            vendor_id = int(device["ID_VENDOR_ID"], 16)
-            product_id = int(device["ID_MODEL_ID"], 16)
-            #print "vendor id: %04X" % vendor_id
-            #print "product id: %04X" % product_id
-            if ((vendor_id == self.boot_fx3.get_vid()) and
-                (product_id == self.boot_fx3.get_pid())):
-                print "Boot FX3: %s" % device.action
-                if device.action == "add" or device.action == "remove":
-                    self.update_usb()
-            
-            if ((vendor_id == self.prometheus_fx3.get_vid()) and
-                (product_id == self.prometheus_fx3.get_pid())):
-                print "Prometheus FX3: %s" % device.action
-                if device.action == "add" or device.action == "remove":
-                    self.update_usb()
-            
-        except KeyError, err:
-            pass
-
-    def update_usb(self):
-        boot_vid = self.boot_fx3.get_vid()
-        boot_pid = self.boot_fx3.get_pid()
-        #print "Boot VID:PID %04X:%04X" % (boot_vid, boot_pid)
-
-        p_vid = self.prometheus_fx3.get_vid()
-        p_pid = self.prometheus_fx3.get_pid()
-        #print "Prometheus VID:PID %04X:%04X" % (p_vid, p_pid)
-
-        devices = usb.core.find(find_all = True)
-        for device in devices:
-            #print "Scanning: %04X:%04X" % (device.idVendor, device.idProduct)
-
-            if device.idVendor == boot_vid and device.idProduct == boot_pid:
-                if self.boot_fx3.is_connected():
-                    self.prometheus_fx3.release()
-                    print "Boot Device Attached"
-                    return
-                else:
-                    try:
-                        self.prometheus_fx3.release()
-                        self.boot_fx3.connect()
-                        self._set_status(USB_STATUS.BOOT_FX3_CONNECTED)
-                    except BootFX3Error, err:
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
-                    except USBDeviceError, err:
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
-                    except usb.core.USBError, err:
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
-                    #Set Status
-                    return
-
-            if device.idVendor == p_vid and device.idProduct == p_pid:
-                if self.prometheus_fx3.is_connected():
-                    self.boot_fx3.release()
-                    print "Prometheus FX3 is attached"
-                    return
-                else:
-                    print "Not Connected to FX3, attempting to connect"
-                    try:
-                        self.boot_fx3.release()
-                        self.prometheus_fx3.connect()
-                        self._set_status(USB_STATUS.PROMETHEUS_FX3_CONNECTED)
-                    except PrometheusFX3Error, err:
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        e = "Prometheus FX3 Error: %s" % str(err)
-                        raise PrometheusUSBError(e)
-                    except USBDeviceError, err:
-                        e = "USB Device Error: %s" % str(err)
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
-                    except usb.core.USBError, err:
-                        e = "USB Core Error: %s" % str(err)
-                        self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-                        raise PrometheusUSBError(str(err))
-                    #Set Status
-                    return
-
-
-        #self.boot_fx3.release()
-        #self.prometheus_fx3.release()
-        #self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-
-    def is_connected(self):
-        if self.prometheus_fx3.is_connected() or self.boot_fx3.is_connected():
+    def is_attached(self):
+        if self.is_prometheus_attached() or self.is_boot_attached():
             return True
         return False
 
-    def is_prometheus_connected(self):
-        return self.prometheus_fx3.is_connected()
+    def is_boot_attached(self):
+        return usb.core.find(idVendor = CYPRESS_VID, idProduct=BOOT_PID) is not None
 
-    def program_fpga(self, buf):
-        print "Programming FPGA"
-        if self.prometheus_fx3.is_connected():
-            print "Prometheus is connected..."
-            self.prometheus_fx3.upload_fpga_image(buf)
-        else:
-            raise PrometheusUSBError("FX3 Not Connected")
+    def is_prometheus_attached(self):
+        return usb.core.find(idVendor = CYPRESS_VID, idProduct=PROMETHEUS_PID) is not None
 
-    def program_mcu(self, buf):
-        if self.boot_fx3.is_connected():
+    def connect_to_prometheus(self):
+        if self.dev is not None:
+            if self.dev.manufacture == CYPRESS_VID and self.dev.idProduct == PROMETHEUS_PID:
+                return
+            self.disconnect()
+        self.dev = usb.core.find(idVendor = CYPRESS_VID, idProduct=PROMETHEUS_PID)
+        if self.dev is None:
+            raise PrometheusUSBError("Prometheus USB Not Found!")
+        if self.dev:
+            if self.debug: print "connected to promtheus"
+
+    def connect_to_boot(self):
+        if self.dev is not None:
+            if self.dev.idVendor == CYPRESS_VID and self.dev.idProduct == BOOT_PID:
+                return
+            self.disconnect()
+
+        self.dev = usb.core.find(idVendor = CYPRESS_VID, idProduct=BOOT_PID)
+        if self.dev:
+            if self.debug: print "connected to boot device"
+
+    def _is_boot_connected(self):
+        if self.dev is None:
+            return False
+        if self.dev.idVendor == CYPRESS_VID and self.dev.idProduct == BOOT_PID:
+            return True
+        return False
+
+    def _is_prometheus_connected(self):
+        if self.dev is None:
+            return False
+        if self.dev.idVendor == CYPRESS_VID and self.dev.idProduct == PROMETHEUS_PID:
+            return True
+        return False
+
+    def _write_mcu_config(self, address, data = Array('B')):
+        if self._is_boot_connected():
+            raise PrometheusUSBError("MCU is in boot state, cannot set configuration data")
+        with self.usb_lock:
             try:
-                self.boot_fx3.download(buf)
-                self.boot_fx3.release()
-                self._set_status(USB_STATUS.FX3_PROGRAMMING_PASSED)
+                self.dev.ctrl_transfer(
+                    bmRequestType   =   0x40,
+                    bRequest        =   address,
+                    wValue          =   0x00,
+                    wIndex          =   0x00,
+                    data_or_wLength =   data,
+                    timeout         =   self.timeout)
+            except usb.core.USBError, err:
+                raise PrometheusUSBError(err)
+
+    def _read_mcu_config(self, address, length = 1):
+        data = None
+        with self.usb_lock:
+            try:
+                data = self.dev.ctrl_transfer(
+                    bmRequestType   =   0xC0, #Read
+                    bRequest        =   address,
+                    wValue          =   0x00,
+                    wIndex          =   0x00,
+                    data_or_wLength =   length,
+                    timeout         =   self.timeout)
+            except usb.core.USBError, err:
+                raise PrometheusUSBError(err)
+
+    def disconnect(self):
+        if self.dev is not None:
+            usb.util.dispose_resources(self.dev)
+            self.dev = None
+
+    def reset_to_boot_mode(self):
+        if self.is_prometheus_attached():
+            self.connect_to_prometheus()
+            self._write_mcu_config(CMD_RESET_TO_BOOTMODE)
+        self.disconnect()
+
+    def program_fpga(self, filepath):
+        if not self.is_prometheus_attached():
+            raise PrometheusUSBError("Prometheus is not attached")
+        self.connect_to_prometheus()
+
+        f = open(filepath, 'r')
+        buf = Array('B')
+        buf.fromstring(f.read())
+        f.close()
+
+        max_size = 512
+        length = len(buf)
+        flength = float(length)
+        length_buf = Array('B', [0, 0, 0, 0])
+        length_buf[3] = (length >> 24)  & 0xFF
+        length_buf[2] = (length >> 16)  & 0xFF
+        length_buf[1] = (length >> 8)   & 0xFF
+        length_buf[0] = (length)        & 0xFF
+        if self.debug: print "FPGA Image size: 0x%08X (%d)" % (length, length)
+        self._write_mcu_config(CMD_ENTER_FPGA_CONFIG_MODE, length_buf.tostring())
+        if self.debug: print "Wait for a moment..."
+        time.sleep(0.1)
+        count = 0
+        while len(buf) > max_size:
+            block = buf[:max_size]
+            try:
+                self.dev.write(0x02, block, timeout = self.timeout)
+            except usb.core.USBError, err:
+                raise PrometheusUSBError(err)
+            if self.debug: sys.stdout.write("\r%%% 3.1f" % (100 * count / flength))
+            if self.debug: sys.stdout.flush()
+
+
+            buf = buf[max_size:]
+            count += max_size
+
+        if len(buf) > 0:
+            try:
+                self.dev.write(0x02, buf, timeout = self.timeout)
+            except usb.core.USBError, err:
+                raise PrometheusUSBError(err)
+
+        if self.debug: sys.stdout.write("\r%%% 3.1f" % (100 * count / flength))
+        if self.debug: sys.stdout.flush()
+        if self.debug: print ""
+
+    def program_mcu(self, filepath):
+        if self.is_attached():
+            if self.is_prometheus_attached():
+                if self.debug: print "Prometheus attached, issuing reset to boot command..."
+                self.reset_to_boot_mode()
+                print "Was in FX3 Mode, change to boot mode..."
                 time.sleep(2)
-            except BootFX3Error, err:
-                self._set_status(USB_STATUS.FX3_PROGRAMMING_FAILED)
-                raise PrometheusUSBError("Error Programming FX3: %s" % str(err))
-        else:
-            raise PrometheusUSBError("FX3 Not Connected")
+        self.connect_to_boot()
+        if not self._is_boot_connected():
+            d = usb.core.show_devices()
+            raise PrometheusUSBError("BUG: pyusb doesn't re-enumerate very well so re-run this script to program MCU")
+        f = open(filepath, 'r')
+        buf = Array('B')
+        buf.fromstring(f.read())
+        f.close()
 
-    def vendor_reset(self):
-        if self.prometheus_fx3.is_connected():
-            self.prometheus_fx3.reset_to_boot()
-            self.prometheus_fx3.release()
+        pos = 0
+        cyp_id = "%c%c" % (buf[0], buf[1])
+        image_cntrl = buf[2]
+        image_type = buf[3]
+        length = float(len(buf[4:]))
+        pos = 4
+        checksum = 0
+        program_entry = 0x00
+        if cyp_id != "CY": raise PrometheusUSBError("Image File does not start with Cypress ID: 'CY': %s" % str(buf[0:1]))
+        if image_cntrl & 0x01 != 0: raise PrometheusUSBError("Image Control Byte bit 0 != 1, this file is not an executable")
+        if image_type != 0xB0: raise PrometheusUSBError("Not a normal FW Binary with Checksum")
 
-            self._set_status(USB_STATUS.DEVICE_NOT_CONNECTED)
-            #print "Delay a usb scan for a couple of seconds"
-            time.sleep(4)
-            self.is_connected()
+        while True:
+            size = (buf[pos + 3] << 24) + (buf[pos + 2] << 16) + (buf[pos + 1] << 8) + buf[pos]
+            pos += 4
+            address = (buf[pos + 3] << 24) + (buf[pos + 2] << 16) + (buf[pos + 1] << 8) + buf[pos]
+            pos += 4
 
-            return True
-        return False
+            if size > 0:
+                data = buf[pos: (pos + size * 4)]
+                self._write_program_data(address, data)
+                for i in range(0, (size * 4), 4):
+                    checksum += ((data[i + 3] << 24) + (data[i + 2] << 16) + (data[i + 1] << 8) + (data[i]))
+                    checksum = checksum & 0xFFFFFFFF
+                pos += (size * 4)
+            else:
+                program_entry = address
+                break
 
-    def _set_status(self, status):
-        self.status = status
-        if self.usb_device_status_cb is not None:
-            self.usb_device_status_cb(self.status)
 
-    def get_usb_status(self):
-        return self.status
+            if self.debug: sys.stdout.write("\r%%% 3.1f" % (100 * pos / length))
+            if self.debug: sys.stdout.flush()
+
+
+        if self.debug: print ""
+        read_checksum = (buf[pos + 3] << 24) + (buf[pos + 2] << 16) + (buf[pos + 1] << 8) + buf[pos]
+        if read_checksum != checksum:
+            raise PrometheusUSBError("Checksum from file != Checksum from Data: 0x%X != 0x%X" % (read_checksum, checksum))
+        time.sleep(1)
+        if self.debug: print "Sending Reset"
+        try:
+            write_len = self.dev.ctrl_transfer(
+                    bmRequestType = 0x40,                 #VRequest, To the devce, Endpoint
+                    bRequest = 0xA0,                      #Vendor Specific
+                    wValue = program_entry & 0x0000FFFF,  #Entry point of the program
+                    wIndex = program_entry >> 16,
+                    #data_or_wLength = 0,                  #No Data
+                    timeout = 1000)                       #Timeout = 1 second
+        except usb.core.USBError, err:
+            pass
+        self.disconnect()
+
+    def _write_program_data(self, address, data):
+        start_address = address
+        buf = Array('B', [])
+
+        index = 0
+        #Size is maximum of 4096
+        finished = False
+        write_len = 0
+        while True:
+            if len(data[index:]) > 4096:
+                buf = data[index: index+ 4096]
+            else:
+                buf = data[index:]
+
+            #if self.debug: print "Writing: %d bytes to address: 0x%X" % (len(buf), address)
+            try:
+                write_len = self.dev.ctrl_transfer(
+                    bmRequestType   = 0x40,                     #VRequest, to device, endpoint
+                    bRequest        = 0xA0,                     #Vendor Spcific write command
+                    wValue          = 0x0000FFFF & address,     #Addr Low 16-bit value
+                    wIndex          = address >> 16,            #Addr High 16-bit value
+                    data_or_wLength = buf.tostring(),           #Data
+                    timeout         = 1000)                     #Timeout 1 second
+            except usb.core.USBError, err:
+                raise PrometheusUSBError("Error while programming MCU: %s" % str(err))
+
+            #Check if there was an error in the transfer
+            if write_len != len(buf):
+                raise PrometheusUSBError("Write Size != Length of buffer: %d != %d" % (write_len, len(buf)))
+
+            #Update the index
+            index += write_len
+            address += write_len
+
+            #Check if we wrote all the data out
+            if index >= len(data):
+                #We're done
+                #if self.debug: print "Sent: %d bytes to address %d" % (len(data), start_address)
+                break
 
     def set_comm_mode(self):
-        if self.prometheus_fx3.is_connected():
+        pass
+
+'''
+    def set_comm_mode(self):
+        if self.prometheus_fx3.is_attached():
             self.prometheus_fx3.set_fpga_comm_mode()
 
     def host_to_device_comm(self, text):
@@ -293,3 +385,4 @@ class PrometheusUSB(object):
         if self.prometheus_fx3:
             self.prometheus_fx3.shutdown()
 
+'''

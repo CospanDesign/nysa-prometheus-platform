@@ -146,11 +146,6 @@ class USBDevice (object):
     def get_pid(self):
         return self.pid
 
-    def is_connected(self):
-        if self.dev is None:
-            return False
-        return True
-
     def on_release(self):
         pass
 

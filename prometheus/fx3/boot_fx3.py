@@ -43,11 +43,13 @@ class BootFX3Error(Exception):
     pass
 
 class BootFX3(USBDevice):
+
+    @staticmethod
+    def is_connected():
+        return usb.core.find(idVendor = CYPRESS_VID, idProduct=BOOT_PID) is not None
+
     def __init__(self):
         super(BootFX3, self).__init__(name = "Bood FX3", vid = CYPRESS_VID, pid = BOOT_PID)
-        #self.dev = None
-        #self.vid = CYPRESS_VID
-        #self.pid = FX3_PID
 
     def download(self, buf):
         """
@@ -110,7 +112,7 @@ class BootFX3(USBDevice):
             raise BootFX3Error("Checksum from file != Checksum from Data: 0x%X != 0x%X" % (read_checksum, checksum))
 
         time.sleep(1)
-        
+
         #Set the program entry point
         print "Sending Reset"
         try:

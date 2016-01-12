@@ -39,23 +39,18 @@ EPILOG = "\n" \
 MCU_BINARY_PATH = os.path.join(os.path.dirname(__file__), "board", "prometheus.img")
 FPGA_BINARY_PATH = os.path.join(os.path.dirname(__file__), "board", "top.bit")
 
-from prometheus import Prometheus
-
 from fx3.prometheus_usb import PrometheusUSB
-from fx3.prometheus_usb import USB_STATUS
 
 class PrometheusManager(object):
     def __init__(self, mcu_binary_path, fpga_binary_path):
-        self.usb_status = USB_STATUS.DEVICE_NOT_CONNECTED
         self.mcu_binary_path = mcu_binary_path
         self.fpga_binary_path = fpga_binary_path
-        self.fx3 = PrometheusUSB(self.usb_device_status_cb,
-                                 self.device_to_host_comm)
+        self.fx3 = PrometheusUSB()
 
     def check_connection(self):
-        if self.fx3.is_connected():
+        if self.fx3.is_attached():
             print "FX3 is connected, determining if it is programmed as Prometheus..."
-            if self.fx3.is_prometheus_connected():
+            if self.fx3.is_prometheus_attached():
                 print "FX3 is programmed as prometheus!"
             else:
                 print "FX3 is not programmed as prometheus!"
@@ -87,44 +82,12 @@ class PrometheusManager(object):
         print "In comm mode: %s" % str(self.fx3.prometheus_read_config())
 
     def is_boot_mode(self):
-        if self.fx3.is_connected():
-            if self.fx3.is_prometheus_connected():
+        if self.fx3.is_attached():
+            if self.fx3.is_prometheus_attached():
                 return False
             else:
                 return True
         return False
-
-    def device_to_host_comm(self, name, level, text):
-        print "Callback from Device: %s, %s" % (name, text)
-
-    def usb_device_status_cb(self, status):
-        if status == USB_STATUS.BOOT_FX3_CONNECTED:
-            self.usb_status = USB_STATUS.BOOT_FX3_CONNECTED
-            print "USB Device Connected"
-
-        elif status == USB_STATUS.DEVICE_NOT_CONNECTED:
-            self.usb_status = USB_STATUS.DEVICE_NOT_CONNECTED
-            print "USB Device Not Connected"
-
-        elif status == USB_STATUS.FX3_PROGRAMMING_FAILED:
-            self.usb_status = USB_STATUS.FX3_PROGRAMMING_FAILED
-            print "USB Failed"
-
-        elif status == USB_STATUS.FX3_PROGRAMMING_PASSED:
-            self.usb_status = USB_STATUS.FX3_PROGRAMMING_PASSED
-            print "FX3 Programmed"
-
-        elif status == USB_STATUS.BUSY:
-            self.usb_status = USB_STATUS.BUSY
-            print "USB Busy"
-
-        elif status == USB_STATUS.USER_APPLICATION:
-            self.usb_status = USB_STATUS.USER_APPLICATION
-            print "User Application??"
-
-        elif status == USB_STATUS.PROMETHEUS_FX3_CONNECTED:
-            self.usb_status = USB_STATUS.PROMETHEUS_FX3_CONNECTED
-            print "Prometheus FX3 Connected"
 
     def read_gpios(self):
         return self.fx3.read_gpios()
@@ -169,8 +132,6 @@ def main(argv):
     mcu_path = MCU_BINARY_PATH
     fpga_path = FPGA_BINARY_PATH
 
-    print "Args: %s" % str(args)
-
     if args.mcuimage is not None:
         mcu_path = args.mcuimage
         if args.debug: print "User Specified a custom MCU Path: %s" % mcu_path
@@ -191,9 +152,33 @@ def main(argv):
         sys.exit(1)
 
 
-    pm = PrometheusManager(mcu_path, fpga_path)
-    pm.check_connection()
+    #pm = PrometheusManager(mcu_path, fpga_path)
+    #pm.check_connection()
+    prometheus = PrometheusUSB(args.debug)
 
+    if args.debug:
+        print "Is Connected:            %s" % str(prometheus.is_attached())
+        print "Is Boot Connected:       %s" % str(prometheus.is_boot_attached())
+        print "Is Prometheus Connected: %s" % str(prometheus.is_prometheus_attached())
+
+    if not prometheus.is_attached():
+        print "Neither Prometheus or Boot device is attached!"
+        sys.exit(1)
+
+    if args.reset:
+        if args.debug: print "Reset to Boot Mode"
+        prometheus.reset_to_boot_mode()
+        sys.exit(0)
+
+    if args.mcuimage is not None:
+        prometheus.program_mcu(mcu_path)
+
+    if args.fpga is not None:
+        prometheus.program_fpga(args.fpga)
+
+    sys.exit(0)
+
+    '''
     if len(args.gpios) == 0:
         print "GPIOs with no input specified!"
         v = pm.read_gpios()
@@ -205,25 +190,7 @@ def main(argv):
         pm.write_gpios(gpios)
         sys.exit(0)
 
-
-    if args.reset:
-        pm.reset_to_boot()
-        sys.exit(1)
-
-    if args.mcuimage is not None:
-        if not pm.is_boot_mode():
-            pm.reset_to_boot()
-            print "\tResetting to boot mode!"
-            pm = PrometheusManager(mcu_path, fpga_path)
-
-        pm.check_connection()
-        if not pm.is_boot_mode():
-            print "Error Resetting to boot mode!"
-            sys.exit(1)
-        pm.program_mcu(mcu_path)
-
-    if args.fpga is not None:
-        pm.program_fpga(args.fpga)
+    '''
 
 if __name__ == "__main__":
     main(sys.argv)
